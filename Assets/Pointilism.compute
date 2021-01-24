@@ -1,0 +1,78 @@
+﻿#pragma kernel Sobel
+
+int width;
+int height;
+
+int skipWidth;
+
+float thickness;
+float length;
+
+struct Vertex {
+    float2 pos;
+    float4 color;
+};
+
+RWStructuredBuffer<Vertex> vertices;
+
+Texture2D<float4> source;
+RWTexture2D<float4> destination;
+
+float Grayscale(float4 color) {
+    return dot(color.rgb, float3(0.2989,0.5870,0.1140));
+}
+
+bool IsClockwise(float2 a, float2 b, float2 c) {
+   return (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y) < 0;
+}
+
+[numthreads(30,30,1)]
+void Sobel (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > 0 && id.y > 0 && id.x < width-1 && id.y < height-1) {
+        float dx = -Grayscale(source[id.xy+float2(-1,-1)])-2*Grayscale(source[id.xy+float2(-1,0)])-Grayscale(source[id.xy+float2(-1,1)])
+            +Grayscale(source[id.xy+float2(1,-1)])+2*Grayscale(source[id.xy+float2(1,0)])+Grayscale(source[id.xy+float2(1,1)]);
+        
+        float dy = Grayscale(source[id.xy+float2(-1,-1)])+2*Grayscale(source[id.xy+float2(0,-1)])+Grayscale(source[id.xy+float2(1,-1)])
+            -Grayscale(source[id.xy+float2(-1,1)])-2*Grayscale(source[id.xy+float2(0,1)])-Grayscale(source[id.xy+float2(1,1)]);
+        
+
+        float2 grad = normalize(float2(dx,dy));
+        float2 dir = length * grad;
+        float2 perp = thickness * float2(-grad.y,grad.x);
+        int index = (id.y-1)*(width-2)+(id.x-1);
+        if (index%skipWidth == 0) {
+            Vertex v0, v1, v2, v3;
+            float2 a = float2(2*(id.x-1)/(float)(width-2)-1,2*(id.y-1)/(float)(height-2)-1);
+            float2 b = a + dir;
+            v0.pos = a - perp;
+            v1.pos = a + perp;
+            v2.pos = b + perp;
+            v3.pos = b - perp;
+            v0.color = source[id.xy];
+            v1.color = source[id.xy];
+            v2.color = source[id.xy];
+            v3.color = source[id.xy];
+        
+            vertices[6*index/skipWidth] = v0;
+            vertices[(6*index/skipWidth)+1] = v1;
+            vertices[(6*index/skipWidth)+2] = v2;
+            vertices[(6*index/skipWidth)+3] = v2;
+            vertices[(6*index/skipWidth)+4] = v3;
+            vertices[(6*index/skipWidth)+5] = v1;
+
+            if (!IsClockwise(v0.pos,v1.pos,v2.pos)) {
+                vertices[(6*index/skipWidth)+1] = v2;
+                vertices[(6*index/skipWidth)+2] = v1;
+            }
+
+            if (!IsClockwise(v2.pos,v3.pos,v1.pos)) {
+                vertices[(6*index/skipWidth)+4] = v1;
+                vertices[(6*index/skipWidth)+5] = v3;
+            }
+            
+        }
+    }
+    destination[id.xy] = source[id.xy];
+}
+
