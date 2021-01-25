@@ -15,12 +15,16 @@ public class PointilismRunner : MonoBehaviour
     public float lineLength;
     public float lineThickness;
 
+    public bool drawLines;
+
+    public bool blur;
+
     private struct Vertex
     {
-        public Vector2 pos;
+        public Vector3 pos;
         public Vector4 color;
     }
-    public Material drawLinesMaterial;
+    private Material drawLinesMaterial;
 
     private RenderTexture tempSource = null;
     // we need this intermediate render texture to access the data   
@@ -52,9 +56,9 @@ public class PointilismRunner : MonoBehaviour
             return;
         }
         drawLinesMaterial = new Material(drawLineShader);
-        vertexBuffer = new ComputeBuffer(6, sizeof(float) * (2 + 4));
+        vertexBuffer = new ComputeBuffer(6*958*538/skipWidth, sizeof(float) * (3 + 4));
         argsBuffer = new ComputeBuffer(4, sizeof(uint), ComputeBufferType.IndirectArguments);
-        argsBuffer.SetData(new int[4] { 6, 960 * 540 / 100, 0, 0 });
+        argsBuffer.SetData(new int[4] { 6, 958 * 538 / skipWidth, 0, 0 });
     }
 
     void OnDestroy()
@@ -118,6 +122,7 @@ public class PointilismRunner : MonoBehaviour
         }
 
         // call the compute shader
+        shader.SetBool("blur", blur);
         shader.SetInt("width", tempDestination.width);
         shader.SetInt("height", tempDestination.height);
         shader.SetInt("skipWidth", skipWidth);
@@ -130,23 +135,13 @@ public class PointilismRunner : MonoBehaviour
            Mathf.CeilToInt(tempDestination.height / 30.0f), 1);
         // copy the result
         Graphics.Blit(tempDestination, destination);
-    }
 
-    void OnPostRender()
-    {
-        Vertex[] vertices = new Vertex[6];
-        vertices[0] = new Vertex { pos = new Vector2(0, 0), color = Color.green };
-        vertices[1] = new Vertex { pos = new Vector2(0, 1), color = Color.green };
-        vertices[2] = new Vertex { pos = new Vector2(1, 0), color = Color.green };
-        vertices[3] = new Vertex { pos = new Vector2(1, 0), color = Color.green };
-        vertices[4] = new Vertex { pos = new Vector2(0, 1), color = Color.green };
-        vertices[5] = new Vertex { pos = new Vector2(1, 1), color = Color.green };
-
-        vertexBuffer.SetData(vertices);
-        Debug.Log(vertices[0].pos + "," + vertices[1].pos + "," + vertices[2].pos + "," + vertices[3].pos + "," + vertices[4].pos + "," + vertices[5].pos);
         drawLinesMaterial.SetBuffer("vertices", vertexBuffer);
         drawLinesMaterial.SetPass(0);
-        Bounds bounds = new Bounds(Vector3.zero, new Vector3(1000, 1000, 1000));
-        Graphics.DrawProcedural(drawLinesMaterial, bounds, MeshTopology.Triangles, 6, 1);
+        if (drawLines)
+        {
+            Graphics.DrawProceduralIndirectNow(MeshTopology.Triangles, argsBuffer);
+        }
     }
+
 }

@@ -21,7 +21,7 @@
             };
 
             struct Vertex {
-                float2 pos;
+                float3 pos;
                 float4 color;
             };
 
@@ -30,16 +30,16 @@
             
             v2f vert (uint id : SV_VertexID, uint inst : SV_InstanceID)
             {
-                Vertex v = vertices[id];
+                Vertex v = vertices[id+inst*6];
                 v2f o;
-                o.vertex = float4(v.pos,0,1);
+                o.vertex = float4(v.pos,1);
                 o.color = v.color;
                 return o;
             }
             
-            fixed4 frag (v2f i) : SV_Target
+            fixed4 frag(v2f i) : SV_Target
             {
-                return float4(1,0,0,1);
+                return i.color;
             }
             ENDCG
         }
