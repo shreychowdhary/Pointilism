@@ -14,10 +14,13 @@ public class PointilismRunner : MonoBehaviour
 
     public int skipWidth;
 
-    public float lineLength;
-    public float lineThickness;
+    public float size;
+    public float lengthFactor;
+
+    public float randomPositionFactor;
 
     public bool drawLines;
+
 
     private struct Vertex
     {
@@ -64,11 +67,11 @@ public class PointilismRunner : MonoBehaviour
         }
 
         drawLinesMaterial = new Material(drawLineShader);
-        vertexBuffer = new ComputeBuffer(6 * 1280 * 720, sizeof(float) * (3 + 4));
-        gradientBuffer = new ComputeBuffer(1280 * 720, sizeof(float) * 2);
+        vertexBuffer = new ComputeBuffer(6 * 1920 * 1080, sizeof(float) * (3 + 4));
+        gradientBuffer = new ComputeBuffer(1920 * 1080, sizeof(float) * 2);
 
         argsBuffer = new ComputeBuffer(4, sizeof(uint), ComputeBufferType.IndirectArguments);
-        argsBuffer.SetData(new int[4] { 6, 1280 * 720 / skipWidth, 0, 0 });
+        argsBuffer.SetData(new int[4] { 6, 1920 * 1080 / skipWidth, 0, 0 });
     }
 
     void OnDestroy()
@@ -155,8 +158,9 @@ public class PointilismRunner : MonoBehaviour
         pointilismShader.SetInt("width", tempDestination.width);
         pointilismShader.SetInt("height", tempDestination.height);
         pointilismShader.SetInt("skipWidth", skipWidth);
-        pointilismShader.SetFloat("thickness", lineThickness);
-        pointilismShader.SetFloat("length", lineLength);
+        pointilismShader.SetFloat("size", size);
+        pointilismShader.SetFloat("lengthFactor", lengthFactor);
+        pointilismShader.SetFloat("randomPositionFactor", randomPositionFactor);
         pointilismShader.SetBuffer(handlePointilism, "gradient", gradientBuffer);
         pointilismShader.SetBuffer(handlePointilism, "vertices", vertexBuffer);
         pointilismShader.SetTexture(handlePointilism, "source", tempSource);
