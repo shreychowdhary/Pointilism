@@ -7,7 +7,9 @@ using UnityEngine;
 public class PointilismRunner : MonoBehaviour
 {
 
-    public ComputeShader shader;
+    public ComputeShader sobelShader;
+    public ComputeShader gaussianBlurShader;
+    public ComputeShader pointilismShader;
     public Shader drawLineShader;
 
     public int skipWidth;
@@ -16,8 +18,6 @@ public class PointilismRunner : MonoBehaviour
     public float lineThickness;
 
     public bool drawLines;
-
-    public bool blur;
 
     private struct Vertex
     {
@@ -35,30 +35,40 @@ public class PointilismRunner : MonoBehaviour
 
     private ComputeBuffer vertexBuffer;
     private ComputeBuffer argsBuffer;
+    private ComputeBuffer gradientBuffer;
+
     private int handleSobel;
+    private int handleGaussianHorizontal;
+    private int handleGaussianVertical;
+    private int handlePointilism;
 
 
     void Start()
     {
-        if (shader == null)
+        if (sobelShader == null || gaussianBlurShader == null || pointilismShader == null)
         {
             Debug.Log("Shader missing.");
             enabled = false;
             return;
         }
 
-        handleSobel = shader.FindKernel("Sobel");
-
-        if (handleSobel < 0)
+        handleSobel = sobelShader.FindKernel("Sobel");
+        handleGaussianHorizontal = gaussianBlurShader.FindKernel("GaussianBlurHorizontal");
+        handleGaussianVertical = gaussianBlurShader.FindKernel("GaussianBlurVertical");
+        handlePointilism = pointilismShader.FindKernel("Pointilism");
+        if (handleSobel < 0 || handleGaussianHorizontal < 0 || handleGaussianVertical < 0 || handlePointilism < 0)
         {
             Debug.Log("Initialization failed.");
             enabled = false;
             return;
         }
+
         drawLinesMaterial = new Material(drawLineShader);
-        vertexBuffer = new ComputeBuffer(6*958*538/skipWidth, sizeof(float) * (3 + 4));
+        vertexBuffer = new ComputeBuffer(6 * 1280 * 720, sizeof(float) * (3 + 4));
+        gradientBuffer = new ComputeBuffer(1280 * 720, sizeof(float) * 2);
+
         argsBuffer = new ComputeBuffer(4, sizeof(uint), ComputeBufferType.IndirectArguments);
-        argsBuffer.SetData(new int[4] { 6, 958 * 538 / skipWidth, 0, 0 });
+        argsBuffer.SetData(new int[4] { 6, 1280 * 720 / skipWidth, 0, 0 });
     }
 
     void OnDestroy()
@@ -85,7 +95,7 @@ public class PointilismRunner : MonoBehaviour
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
-        if (shader == null || handleSobel < 0 || source == null)
+        if (sobelShader == null || handleSobel < 0 || source == null)
         {
             Graphics.Blit(source, destination); // just copy
             return;
@@ -121,20 +131,48 @@ public class PointilismRunner : MonoBehaviour
             tempDestination.Create();
         }
 
-        // call the compute shader
-        shader.SetBool("blur", blur);
-        shader.SetInt("width", tempDestination.width);
-        shader.SetInt("height", tempDestination.height);
-        shader.SetInt("skipWidth", skipWidth);
-        shader.SetFloat("thickness", lineThickness);
-        shader.SetFloat("length", lineLength);
-        shader.SetTexture(handleSobel, "source", tempSource);
-        shader.SetTexture(handleSobel, "destination", tempDestination);
-        shader.SetBuffer(handleSobel, "vertices", vertexBuffer);
-        shader.Dispatch(handleSobel, Mathf.CeilToInt(tempDestination.width / 30.0f),
-           Mathf.CeilToInt(tempDestination.height / 30.0f), 1);
-        // copy the result
-        Graphics.Blit(tempDestination, destination);
+        // Call Sobel Gradient kernel
+        sobelShader.SetInt("width", tempDestination.width);
+        sobelShader.SetInt("height", tempDestination.height);
+        sobelShader.SetTexture(handleSobel, "source", tempSource);
+        sobelShader.SetBuffer(handleSobel, "gradient", gradientBuffer);
+        sobelShader.Dispatch(handleSobel, Mathf.CeilToInt(tempDestination.width / 30f),
+           Mathf.CeilToInt(tempDestination.height / 30f), 1);
+
+
+        // Call Horizontal Gaussian Blur kernel
+        gaussianBlurShader.SetInt("width", tempDestination.width);
+        gaussianBlurShader.SetInt("height", tempDestination.height);
+        gaussianBlurShader.SetBuffer(handleGaussianHorizontal, "gradient", gradientBuffer);
+        gaussianBlurShader.Dispatch(handleGaussianHorizontal, Mathf.CeilToInt(tempDestination.width / 512f),
+           Mathf.CeilToInt(tempDestination.height / 2f), 1);
+        // Vertical Pass
+        gaussianBlurShader.SetBuffer(handleGaussianVertical, "gradient", gradientBuffer);
+        gaussianBlurShader.Dispatch(handleGaussianVertical, Mathf.CeilToInt(tempDestination.width / 2f),
+           Mathf.CeilToInt(tempDestination.height / 512f), 1);
+
+        // Draw Lines
+        pointilismShader.SetInt("width", tempDestination.width);
+        pointilismShader.SetInt("height", tempDestination.height);
+        pointilismShader.SetInt("skipWidth", skipWidth);
+        pointilismShader.SetFloat("thickness", lineThickness);
+        pointilismShader.SetFloat("length", lineLength);
+        pointilismShader.SetBuffer(handlePointilism, "gradient", gradientBuffer);
+        pointilismShader.SetBuffer(handlePointilism, "vertices", vertexBuffer);
+        pointilismShader.SetTexture(handlePointilism, "source", tempSource);
+        pointilismShader.SetTexture(handlePointilism, "destination", tempDestination);
+        pointilismShader.SetTextureFromGlobal(handlePointilism, "depth", "_CameraDepthTexture");
+
+        if (drawLines)
+        {
+            pointilismShader.Dispatch(handlePointilism, Mathf.CeilToInt(tempDestination.width / 32f),
+               Mathf.CeilToInt(tempDestination.height / 32f), 1);
+            Graphics.Blit(tempDestination, destination);
+        }
+        else
+        {
+            Graphics.Blit(tempSource, destination);
+        }
 
         drawLinesMaterial.SetBuffer("vertices", vertexBuffer);
         drawLinesMaterial.SetPass(0);

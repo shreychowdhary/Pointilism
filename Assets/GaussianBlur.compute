@@ -1,0 +1,78 @@
+﻿// Each #kernel tells which unction to compile; you can have many kernels
+#pragma kernel GaussianBlurHorizontal
+#pragma kernel GaussianBlurVertical
+
+int width;
+int height;
+
+RWStructuredBuffer<float2> gradient;
+
+groupshared float2 horizontalSharedData[2][536];
+
+
+[numthreads(512,2,1)]
+void GaussianBlurHorizontal (uint3 id : SV_DispatchThreadID, uint3 threadId: SV_GroupThreadID, uint3 groupId: SV_GroupID) {
+    float blurKernel[25] = { 0.001345691572213281, 0.0026671877982330635, 0.004981110488106821, 0.008765229077355385, 0.014533321558252965, 0.022705496907541863, 0.033424248786755685, 0.046361429224936704, 0.060592168119055365, 0.0746174985659552, 0.08658235520908572, 0.09466351379717554, 0.09752149779066485, 0.09466351379717554, 0.08658235520908572, 0.0746174985659552, 0.060592168119055365, 0.046361429224936704, 0.033424248786755685, 0.022705496907541863, 0.014533321558252965, 0.008765229077355385, 0.004981110488106821, 0.0026671877982330635, 0.001345691572213281 };
+
+    int groupWidth = 512;
+    int groupHeight = 2;
+
+    int maskSize = 25;
+    int n = maskSize/2;
+
+    int haloLeftIndex = id.x-groupWidth;
+    if (threadId.x >= groupWidth - n) {
+        horizontalSharedData[threadId.y][threadId.x-(groupWidth-n)] = (haloLeftIndex < 0) ? 0 : gradient[id.y*width + haloLeftIndex];
+    }
+    
+    horizontalSharedData[threadId.y][n+threadId.x] = gradient[id.y*width+id.x];
+    
+    int haloRightIndex = id.x+groupWidth;
+    if (threadId.x < n) {
+        horizontalSharedData[threadId.y][groupWidth+threadId.x+n] = (haloRightIndex >= width) ? 0 : gradient[id.y*width+haloRightIndex];
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float2 sum = float2(0,0);
+    for (int i = 0; i < maskSize; i++) {
+        sum += blurKernel[i]*horizontalSharedData[threadId.y][threadId.x+i];
+    }
+    
+    if (id.x < width && id.y < height) {
+        gradient[id.y*width+id.x] = sum;
+    }
+}
+
+groupshared float2 verticalSharedData[536][2];
+
+//TODO make faster by avoiding cache misses
+[numthreads(2,512,1)]
+void GaussianBlurVertical (uint3 id : SV_DispatchThreadID, uint3 threadId: SV_GroupThreadID, uint3 groupId: SV_GroupID) {
+    float blurKernel[25] = { 0.001345691572213281, 0.0026671877982330635, 0.004981110488106821, 0.008765229077355385, 0.014533321558252965, 0.022705496907541863, 0.033424248786755685, 0.046361429224936704, 0.060592168119055365, 0.0746174985659552, 0.08658235520908572, 0.09466351379717554, 0.09752149779066485, 0.09466351379717554, 0.08658235520908572, 0.0746174985659552, 0.060592168119055365, 0.046361429224936704, 0.033424248786755685, 0.022705496907541863, 0.014533321558252965, 0.008765229077355385, 0.004981110488106821, 0.0026671877982330635, 0.001345691572213281 };
+
+    int groupWidth = 2;
+    int groupHeight = 512;
+
+    int maskSize = 25;
+    int n = maskSize/2;
+
+    int haloBottomIndex = id.y-groupHeight;
+    if (threadId.y >= groupHeight - n) {
+        verticalSharedData[threadId.y-(groupHeight-n)][threadId.x] = (haloBottomIndex < 0) ? 0 : gradient[haloBottomIndex*width+id.x];
+    }
+    
+    verticalSharedData[threadId.y+n][threadId.x] = gradient[id.y*width+id.x];
+    
+    int haloTopIndex = id.y+groupHeight;
+    if (threadId.y < n) {
+        verticalSharedData[threadId.y+groupHeight+n][threadId.x] = (haloTopIndex >= height) ? 0 : gradient[haloTopIndex*width+id.x];
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float2 sum = float2(0,0);
+    for (int i = 0; i < maskSize; i++) {
+        sum += blurKernel[i]*verticalSharedData[threadId.y+i][threadId.x];
+    }
+    
+    if (id.x < width && id.y < height) {
+        gradient[id.y*width+id.x] = sum;
+    }
+}

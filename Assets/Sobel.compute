@@ -1,0 +1,58 @@
+﻿#pragma kernel Sobel
+
+int width;
+int height;
+
+Texture2D<float4> source;
+RWStructuredBuffer<float2> gradient;
+
+groupshared float sharedData[32][32];
+
+float Grayscale(float4 color) {
+    return dot(color.rgb, float3(0.2989,0.5870,0.1140));
+}
+
+[numthreads(32,32,1)]
+void Sobel (uint3 id : SV_DispatchThreadID, uint3 threadId: SV_GroupThreadID, uint3 groupId: SV_GroupID) {
+    //Could implement seperable to speedup
+    int groupWidth = 32;
+    int groupHeight = 32;
+    
+    int sobelX[3][3] = {{-1,0,1},{-2,0,2},{-1,0,1}};
+    int sobelY[3][3] = {{1,2,1},{0,0,0},{-1,-2,-1}};
+
+    int maskSize = 3;
+    int n = maskSize/2;
+    int outputSize = groupWidth-(maskSize-1);
+    int outputRow = groupId.y * outputSize + threadId.y;
+    int outputCol = groupId.x * outputSize + threadId.x;
+    
+    int inputRow = outputRow - n;
+    int inputCol = outputCol - n;
+
+    if (inputRow >= 0 && inputRow < height && inputCol >= 0 && inputCol < width) {
+        sharedData[threadId.y][threadId.x] = Grayscale(source[float2(inputCol,inputRow)]);
+    } else {
+        sharedData[threadId.y][threadId.x] = 0;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+    
+    if (threadId.x < outputSize && threadId.y < outputSize) {
+        float dx = 0;
+        float dy = 0;
+        for (int i = 0; i < maskSize; i++) {
+            for (int j = 0; j < maskSize; j++) {
+                dx += sobelX[i][j]*sharedData[i+threadId.y][j+threadId.x];
+                dy += sobelY[i][j]*sharedData[i+threadId.y][j+threadId.x];
+            }
+        }
+
+        if (outputRow > 0 && outputRow < height-1 && outputCol > 0 && outputCol < width-1) {
+            gradient[outputRow*width+outputCol]= float2(dx,dy)*10;
+        }
+    }
+}
+
+
+
