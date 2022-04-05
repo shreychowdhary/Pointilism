@@ -14,6 +14,8 @@ public class PointilismRunner : MonoBehaviour
 
     public int skipWidth;
 
+    public int skipHeight;
+
     public float size;
     public float lengthFactor;
 
@@ -67,11 +69,11 @@ public class PointilismRunner : MonoBehaviour
         }
 
         drawLinesMaterial = new Material(drawLineShader);
-        vertexBuffer = new ComputeBuffer(6 * 1920 * 1080, sizeof(float) * (3 + 4));
+        vertexBuffer = new ComputeBuffer(6 * 1920 * 1080 / (skipWidth * skipHeight), sizeof(float) * (3 + 4));
         gradientBuffer = new ComputeBuffer(1920 * 1080, sizeof(float) * 2);
 
         argsBuffer = new ComputeBuffer(4, sizeof(uint), ComputeBufferType.IndirectArguments);
-        argsBuffer.SetData(new int[4] { 6, 1920 * 1080 / skipWidth, 0, 0 });
+        argsBuffer.SetData(new int[4] { 6, 1920 * 1080 / (skipWidth * skipHeight), 0, 0 });
     }
 
     void OnDestroy()
@@ -158,6 +160,7 @@ public class PointilismRunner : MonoBehaviour
         pointilismShader.SetInt("width", tempDestination.width);
         pointilismShader.SetInt("height", tempDestination.height);
         pointilismShader.SetInt("skipWidth", skipWidth);
+        pointilismShader.SetInt("skipHeight", skipHeight);
         pointilismShader.SetFloat("size", size);
         pointilismShader.SetFloat("lengthFactor", lengthFactor);
         pointilismShader.SetFloat("randomPositionFactor", randomPositionFactor);

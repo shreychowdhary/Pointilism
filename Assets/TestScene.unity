@@ -347,9 +347,11 @@ MonoBehaviour:
   gaussianBlurShader: {fileID: 7200000, guid: 349127dcc054100fda55fdbbae888ba2, type: 3}
   pointilismShader: {fileID: 7200000, guid: c98989a942e3934f1ade09e5982a6fee, type: 3}
   drawLineShader: {fileID: 4800000, guid: 346cc0d69486d6cc28ad4cc4a2c2954d, type: 3}
-  skipWidth: 5
-  lineLength: 0.0125
-  lineThickness: 0.005
+  skipWidth: 8
+  skipHeight: 4
+  size: 0.0065
+  lengthFactor: 0.002
+  randomPositionFactor: 0.002
   drawLines: 1
 --- !u!81 &1527927442
 AudioListener:

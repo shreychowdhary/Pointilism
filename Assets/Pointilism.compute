@@ -7,6 +7,7 @@
 int width;
 int height;
 int skipWidth;
+int skipHeight;
 float size;
 float lengthFactor;
 float randomPositionFactor;
@@ -60,20 +61,20 @@ void drawOval(int index, float2 position, float2 gradient, float4 color) {
     v2.color = color;
     v3.color = color;
 
-    vertices[6*index/skipWidth] = v0;
-    vertices[(6*index/skipWidth)+1] = v1;
-    vertices[(6*index/skipWidth)+2] = v2;
-    vertices[(6*index/skipWidth)+3] = v2;
-    vertices[(6*index/skipWidth)+4] = v3;
-    vertices[(6*index/skipWidth)+5] = v0;
+    vertices[6*index] = v0;
+    vertices[6*index+1] = v1;
+    vertices[6*index+2] = v2;
+    vertices[6*index+3] = v2;
+    vertices[6*index+4] = v3;
+    vertices[6*index+5] = v0;
 
     if (!IsClockwise(v0.pos,v1.pos,v2.pos)) {
-        vertices[(6*index/skipWidth)+1] = v2;
-        vertices[(6*index/skipWidth)+2] = v1;
+        vertices[6*index+1] = v2;
+        vertices[6*index+2] = v1;
     }
     if (!IsClockwise(v2.pos,v3.pos,v0.pos)) {
-        vertices[(6*index/skipWidth)+4] = v0;
-        vertices[(6*index/skipWidth)+5] = v3;
+        vertices[6*index+4] = v0;
+        vertices[6*index+5] = v3;
     }
 }
 
@@ -81,21 +82,20 @@ void drawOval(int index, float2 position, float2 gradient, float4 color) {
 void Pointilism (uint3 id : SV_DispatchThreadID) {
     int x = id.x;
     int y = id.y;
-    float dx = gradient[id.y*width+id.x].x;
-    float dy = gradient[id.y*width+id.x].y;
+    float dx = gradient[y*width+x].x;
+    float dy = gradient[y*width+x].y;
     float2 grad = float2(dx,dy);
-    gradient[id.y*width+id.x] = grad.xy;
+    gradient[y*width+x] = grad.xy;
     destination[id.xy] = source[id.xy];
 
-    int index = id.y*width+id.x;
-    if (index%skipWidth == 0) {
+    if ((x+1)%skipWidth == 0 && (y+1)%skipHeight == 0) {
         
         float2 position = float2(2*(x/(float)width)-1,2*(y/(float)height)-1);
-        position += normalize(float2(fmod(random(position),1)-.5, fmod(random(grad),1)-.5))*randomPositionFactor;
+        position += normalize(float2(fmod(random(position),1)-.5, fmod(random(position.yx),1)-.5))*randomPositionFactor;
 
-        float3 hsvColor = RGBToHSV(source[id.xy].xyz) + float3(clamp(fmod(random(position),1)*.15-.075,0,1), clamp(fmod(random(grad),1)*.3-.1,0,1), 0);
+        float3 hsvColor = RGBToHSV(source[id.xy].xyz) + float3(fmod(random(position),1)*.1-.05, fmod(random(position.yx),1)*.1-.05, 0);
         float4 color = float4(HSVToRGB(hsvColor),1);
 
-        drawOval(index, position, grad, color);
+        drawOval((y/skipHeight)*width/skipWidth+x/skipWidth, position, grad, color);
     }
 }
